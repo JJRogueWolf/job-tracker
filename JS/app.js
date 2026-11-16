@@ -4,7 +4,9 @@ const cancelJobButton = document.querySelector("#cancel-job-btn");
 const jobDialog = document.querySelector("#job-dialog");
 const jobForm = document.querySelector("#job-form");
 
-let jobs = JSON.parse(localStorage.getItem("jobs")) || [];
+const API_URL = "http://127.0.0.1:8001/jobs";
+
+let jobs = [];
 
 let editingJobId = null;
 
@@ -30,7 +32,8 @@ cancelJobButton.addEventListener("click", function() {
 });
 
 
-jobForm.addEventListener("submit", function(event) {
+
+jobForm.addEventListener("submit", async function(event) {
     event.preventDefault();
 
     const formData = new FormData(jobForm);
@@ -42,33 +45,37 @@ jobForm.addEventListener("submit", function(event) {
         appliedDate: formData.get("appliedDate")
     };
 
-    if (editingJobId === null) {
-        const newJob = {
-            id: crypto.randomUUID(),
-            ...jobData
-        };
+    const isEditing = editingJobId !== null;
 
-        jobs.push(newJob);
-    } else {
-        const existingJob = jobs.find(function(job) {
-            return job.id === editingJobId;
+    const url = isEditing
+        ? `${API_URL}/${editingJobId}`
+        : API_URL;
+
+    const method = isEditing ? "PATCH" : "POST";
+
+    try {
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(jobData)
         });
 
-        if (!existingJob) {
-            return;
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
         }
 
-        Object.assign(existingJob, jobData);
+        await loadJobs();
+
+        editingJobId = null;
+        jobForm.reset();
+        jobDialog.close();
+
+    } catch (error) {
+        console.error("Failed to save job:", error);
+        alert("Could not save the application.");
     }
-
-    localStorage.setItem("jobs", JSON.stringify(jobs));
-
-    renderJobs();
-    updateStats();
-
-    editingJobId = null;
-    jobForm.reset();
-    jobDialog.close();
 });
 
 function renderJobs() {
@@ -176,21 +183,29 @@ function editJob(id) {
 }
 
 
-function deleteJob(id) {
+
+async function deleteJob(id) {
     const confirmed = confirm("Delete this job application?");
 
     if (!confirmed) {
         return;
     }
 
-    jobs = jobs.filter(function(job) {
-        return job.id !== id;
-    });
+    try {
+        const response = await fetch(`${API_URL}/${id}`, {
+            method: "DELETE"
+        });
 
-    localStorage.setItem("jobs", JSON.stringify(jobs));
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+        }
 
-    renderJobs();
-    updateStats();
+        await loadJobs();
+
+    } catch (error) {
+        console.error("Failed to delete job:", error);
+        alert("Could not delete the application.");
+    }
 }
 
 function updateStats() {
@@ -209,5 +224,23 @@ function updateStats() {
     document.querySelector("#offer-count").textContent = offers;
 }
 
-renderJobs();
-updateStats();
+async function loadJobs() {
+    try {
+        const response = await fetch(API_URL);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+        }
+
+        jobs = await response.json();
+
+        renderJobs();
+        updateStats();
+
+    } catch (error) {
+        console.error("Failed to load jobs:", error);
+        alert("Could not load job applications from the server.");
+    }
+}
+
+loadJobs();

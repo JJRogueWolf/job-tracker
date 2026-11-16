@@ -10,10 +10,23 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from pydantic import ConfigDict
 
+from fastapi.middleware.cors import CORSMiddleware
+
 from database import get_db
 from models import JobDB
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500"
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Content-Type"],
+)
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -41,7 +54,12 @@ def home():
 
 @app.get("/jobs", response_model=list[Job])
 def get_jobs(db: DbSession):
-    return db.scalars(select(JobDB)).all()
+    statement = select(JobDB).order_by(
+        JobDB.appliedDate.desc(),
+        JobDB.id.desc()
+    )
+
+    return db.scalars(statement).all()
 
 
 @app.post("/jobs", response_model=Job, status_code=201)
