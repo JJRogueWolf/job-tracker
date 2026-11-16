@@ -3,10 +3,19 @@ from pydantic import BaseModel, Field
 from datetime import date
 from uuid import UUID, uuid4
 
+from typing import Annotated
+
+from fastapi import Depends
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+from pydantic import ConfigDict
+
+from database import get_db
+from models import JobDB
+
 app = FastAPI()
 
-jobs = []
-
+DbSession = Annotated[Session, Depends(get_db)]
 
 class JobCreate(BaseModel):
     company: str = Field(min_length=1)
@@ -17,6 +26,7 @@ class JobCreate(BaseModel):
 
 class Job(JobCreate):
     id: UUID
+    model_config = ConfigDict(from_attributes=True)
 
 class JobUpdate(BaseModel):
     company: str | None = Field(default=None, min_length=1)
@@ -29,60 +39,57 @@ class JobUpdate(BaseModel):
 def home():
     return {"message": "Job Tracker API is running"}
 
-@app.get("/jobs", response_model = list[Job])
-def get_jobs():
-    return jobs
+@app.get("/jobs", response_model=list[Job])
+def get_jobs(db: DbSession):
+    return db.scalars(select(JobDB)).all()
 
 
-@app.post("/jobs", response_model=Job, status_code=status.HTTP_201_CREATED)
-def create_job(job: JobCreate):
-    new_job = Job(
-        id=uuid4(),
-        **job.model_dump()
-    )
+@app.post("/jobs", response_model=Job, status_code=201)
+def create_job(job: JobCreate, db: DbSession):
+    new_job = JobDB(**job.model_dump())
 
-    jobs.append(new_job)
+    db.add(new_job)
+    db.commit()
+    db.refresh(new_job)
 
     return new_job
 
 @app.get("/jobs/{job_id}", response_model=Job)
-def get_job(job_id: UUID):
-    for job in jobs:
-        if job.id == job_id:
-            return job
+def get_job(job_id: UUID, db: DbSession):
+    job = db.get(JobDB, job_id)
 
-    raise HTTPException(
-        status_code=404,
-        detail="Job not found"
-    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return job
+
 
 
 @app.patch("/jobs/{job_id}", response_model=Job)
-def update_job(job_id: UUID, updates: JobUpdate):
-    for index, job in enumerate(jobs):
-        if job.id == job_id:
-            update_data = updates.model_dump(exclude_unset=True)
+def update_job(job_id: UUID, updates: JobUpdate, db: DbSession):
+    job = db.get(JobDB, job_id)
 
-            updated_job = job.model_copy(update=update_data)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
 
-            jobs[index] = updated_job
+    update_data = updates.model_dump(exclude_unset=True)
 
-            return updated_job
+    for field, value in update_data.items():
+        setattr(job, field, value)
 
-    raise HTTPException(
-        status_code=404,
-        detail="Job not found"
-    )
+    db.commit()
+    db.refresh(job)
+
+    return job
+
 
 @app.delete("/jobs/{job_id}", status_code=204)
-def delete_job(job_id: UUID):
-    for index, job in enumerate(jobs):
-        if job.id == job_id:
-            jobs.pop(index)
-            return
+def delete_job(job_id: UUID, db: DbSession):
+    job = db.get(JobDB, job_id)
 
-    raise HTTPException(
-        status_code=404,
-        detail="Job not found"
-    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    db.delete(job)
+    db.commit()
 
