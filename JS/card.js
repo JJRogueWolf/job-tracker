@@ -1,5 +1,6 @@
 const container = document.querySelector(".card-container");
 const card = document.querySelector(".card");
+const glow = document.querySelector(".glow");
 let mouseX = 0;
 let mouseY = 0;
 
@@ -27,7 +28,7 @@ container.addEventListener("mousemove", function (event) {
 container.addEventListener("mouseleave", function() {
     targetRotationX = 0;
     targetRotationY = 0;
-    card.querySelector(".glow").style.opacity = "0";
+    glow.style.opacity = "0";
 });
 
 function updateCard() {
@@ -38,7 +39,7 @@ function updateCard() {
     card.style.setProperty("--mouse-x", `${localX}px`);
     card.style.setProperty("--mouse-y", `${localY}px`);
 
-    card.querySelector(".glow").style.opacity = "1";
+    glow.style.opacity = "1";
 
 
     const offsetX = localX - (rect.width/2);

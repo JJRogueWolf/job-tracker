@@ -1,0 +1,213 @@
+
+const addJobButton = document.querySelector("#add-job-btn");
+const cancelJobButton = document.querySelector("#cancel-job-btn");
+const jobDialog = document.querySelector("#job-dialog");
+const jobForm = document.querySelector("#job-form");
+
+let jobs = JSON.parse(localStorage.getItem("jobs")) || [];
+
+let editingJobId = null;
+
+const searchInput = document.querySelector("#job-search");
+const statusFilter = document.querySelector("#status-filter");
+
+searchInput.addEventListener("input", renderJobs);
+statusFilter.addEventListener("change", renderJobs);
+
+addJobButton.addEventListener("click", function() {
+    editingJobId = null;
+
+    jobForm.reset();
+
+    jobDialog.querySelector("h2").textContent = "Add Job Application";
+    jobForm.querySelector('button[type="submit"]').textContent = "Save Application";
+
+    jobDialog.showModal();
+});
+
+cancelJobButton.addEventListener("click", function() {
+    jobDialog.close();
+});
+
+
+jobForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+
+    const formData = new FormData(jobForm);
+
+    const jobData = {
+        company: formData.get("company"),
+        position: formData.get("position"),
+        status: formData.get("status"),
+        appliedDate: formData.get("appliedDate")
+    };
+
+    if (editingJobId === null) {
+        const newJob = {
+            id: crypto.randomUUID(),
+            ...jobData
+        };
+
+        jobs.push(newJob);
+    } else {
+        const existingJob = jobs.find(function(job) {
+            return job.id === editingJobId;
+        });
+
+        if (!existingJob) {
+            return;
+        }
+
+        Object.assign(existingJob, jobData);
+    }
+
+    localStorage.setItem("jobs", JSON.stringify(jobs));
+
+    renderJobs();
+    updateStats();
+
+    editingJobId = null;
+    jobForm.reset();
+    jobDialog.close();
+});
+
+function renderJobs() {
+    const jobList = document.querySelector("#job-list");
+
+    jobList.replaceChildren();
+
+    if (jobs.length === 0) {
+        const message = document.createElement("p");
+        message.className = "empty-message";
+        message.textContent = "No applications yet.";
+        jobList.appendChild(message);
+        return;
+    }
+
+    const searchTerm = searchInput.value.trim().toLowerCase();
+    const selectedStatus = statusFilter.value;
+
+    const filteredJobs = jobs.filter(function(job) {
+        const matchesSearch =
+            job.company.toLowerCase().includes(searchTerm) ||
+            job.position.toLowerCase().includes(searchTerm);
+
+        const matchesStatus =
+            selectedStatus === "All" ||
+            job.status === selectedStatus;
+
+        return matchesSearch && matchesStatus;
+    });
+
+    if (filteredJobs.length === 0) {
+        const message = document.createElement("p");
+        message.className = "empty-message";
+        message.textContent = "No matching applications found.";
+
+        jobList.appendChild(message);
+        return;
+    }
+
+    filteredJobs.forEach(function(job) {
+        const jobCard = document.createElement("div");
+        jobCard.className = "job-item";
+
+        const details = document.createElement("div");
+
+        const company = document.createElement("h3");
+        company.textContent = job.company;
+
+        const position = document.createElement("p");
+        position.textContent = job.position;
+
+        const status = document.createElement("span");
+        status.className = "job-status";
+        status.textContent = job.status;
+
+        details.append(company, position);
+
+        const editButton = document.createElement("button");
+        editButton.textContent = "Edit";
+        editButton.className = "edit-btn";
+
+        editButton.addEventListener("click", function() {
+            editJob(job.id);
+        });
+        
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        deleteButton.className = "delete-btn";
+
+        deleteButton.addEventListener("click", function() {
+            deleteJob(job.id);
+        });
+
+        const actions = document.createElement("div");
+        actions.className = "job-actions";
+        actions.append(status, editButton, deleteButton);
+
+        jobCard.append(details, actions);
+
+        jobList.appendChild(jobCard);
+    });
+}
+
+
+function editJob(id) {
+    const job = jobs.find(function(job) {
+        return job.id === id;
+    });
+
+    if (!job) {
+        return;
+    }
+
+    editingJobId = id;
+
+    jobForm.elements["company"].value = job.company;
+    jobForm.elements["position"].value = job.position;
+    jobForm.elements["status"].value = job.status;
+    jobForm.elements["appliedDate"].value = job.appliedDate;
+
+    jobDialog.querySelector("h2").textContent = "Edit Job Application";
+    jobForm.querySelector('button[type="submit"]').textContent = "Save Changes";
+
+    jobDialog.showModal();
+}
+
+
+function deleteJob(id) {
+    const confirmed = confirm("Delete this job application?");
+
+    if (!confirmed) {
+        return;
+    }
+
+    jobs = jobs.filter(function(job) {
+        return job.id !== id;
+    });
+
+    localStorage.setItem("jobs", JSON.stringify(jobs));
+
+    renderJobs();
+    updateStats();
+}
+
+function updateStats() {
+    const total = jobs.length;
+
+    const interviews = jobs.filter(function(job) {
+        return job.status === "Interview";
+    }).length;
+
+    const offers = jobs.filter(function(job) {
+        return job.status === "Offer";
+    }).length;
+
+    document.querySelector("#total-count").textContent = total;
+    document.querySelector("#interview-count").textContent = interviews;
+    document.querySelector("#offer-count").textContent = offers;
+}
+
+renderJobs();
+updateStats();
