@@ -1,9 +1,15 @@
+import os
 from fastapi import FastAPI, status, HTTPException
 from pydantic import BaseModel, Field
 from datetime import date
 from uuid import UUID, uuid4
 
 from typing import Annotated
+from typing import Literal
+from pydantic import field_validator
+
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 
 from fastapi import Depends
 from sqlalchemy import select
@@ -17,45 +23,78 @@ from models import JobDB
 
 app = FastAPI()
 
+allowed_origins = os.environ.get(
+    "FRONTEND_ORIGINS",
+    "http://127.0.0.1:5500,http://localhost:5500"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5500",
-        "http://localhost:5500"
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type"]
 )
 
 DbSession = Annotated[Session, Depends(get_db)]
 
+JobStatus = Literal[
+    "Applied",
+    "Interview",
+    "Offer",
+    "Rejected"
+]
+
 class JobCreate(BaseModel):
-    company: str = Field(min_length=1)
-    position: str = Field(min_length=1)
-    status: str = "Applied"
+    company: str = Field(min_length=1, max_length=200)
+    position: str = Field(min_length=1, max_length=200)
+    status: JobStatus = "Applied"
     appliedDate: date
 
+    @field_validator("company", "position")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("This field cannot be empty")
+        return value
+
+
+class JobUpdate(BaseModel):
+    company: str | None = Field(default=None, min_length=1, max_length=200)
+    position: str | None = Field(default=None, min_length=1, max_length=200)
+    status: JobStatus | None = None
+    appliedDate: date | None = None
+
+    @field_validator("company", "position", "status", "appliedDate")
+    @classmethod
+    def reject_null(cls, value):
+        if value is None:
+            raise ValueError("This field cannot be null")
+        return value
+
+    @field_validator("company", "position")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("This field cannot be empty")
+        return value
 
 class Job(JobCreate):
     id: UUID
     model_config = ConfigDict(from_attributes=True)
 
-class JobUpdate(BaseModel):
-    company: str | None = Field(default=None, min_length=1)
-    position: str | None = Field(default=None, min_length=1)
-    status: str | None = None
-    appliedDate: date | None = None
 
-
-@app.get("/")
-def home():
-    return {"message": "Job Tracker API is running"}
+# @app.get("/")
+# def home():
+#     return {"message": "Job Tracker API is running"}
 
 @app.get("/jobs", response_model=list[Job])
 def get_jobs(db: DbSession):
     statement = select(JobDB).order_by(
         JobDB.appliedDate.desc(),
+        JobDB.createdAt.desc(),
         JobDB.id.desc()
     )
 
@@ -111,3 +150,10 @@ def delete_job(job_id: UUID, db: DbSession):
     db.delete(job)
     db.commit()
 
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+app.mount(
+    "/",
+    StaticFiles(directory=FRONTEND_DIR, html=True),
+    name="frontend"
+)
