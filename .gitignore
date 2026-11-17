@@ -2,9 +2,10 @@
 .venv/
 venv/
 
-# Python cache
+# Cache
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Environment variables and secrets
 .env

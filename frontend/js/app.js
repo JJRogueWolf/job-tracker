@@ -4,7 +4,7 @@ const cancelJobButton = document.querySelector("#cancel-job-btn");
 const jobDialog = document.querySelector("#job-dialog");
 const jobForm = document.querySelector("#job-form");
 
-const API_URL = "http://127.0.0.1:8001/jobs";
+const API_URL = `${window.location.origin}/jobs`;
 
 let jobs = [];
 
@@ -35,6 +35,11 @@ cancelJobButton.addEventListener("click", function() {
 
 jobForm.addEventListener("submit", async function(event) {
     event.preventDefault();
+    const submitButton = jobForm.querySelector('button[type="submit"]');
+
+    if (submitButton.disabled) return;
+
+    submitButton.disabled = true;
 
     const formData = new FormData(jobForm);
 
@@ -66,7 +71,11 @@ jobForm.addEventListener("submit", async function(event) {
             throw new Error(`HTTP error: ${response.status}`);
         }
 
-        await loadJobs();
+        const loaded = await loadJobs();
+
+        if (!loaded) {
+            return;
+        }
 
         editingJobId = null;
         jobForm.reset();
@@ -75,6 +84,9 @@ jobForm.addEventListener("submit", async function(event) {
     } catch (error) {
         console.error("Failed to save job:", error);
         alert("Could not save the application.");
+    }
+    finally {
+        submitButton.disabled = false;
     }
 });
 
@@ -224,6 +236,7 @@ function updateStats() {
     document.querySelector("#offer-count").textContent = offers;
 }
 
+
 async function loadJobs() {
     try {
         const response = await fetch(API_URL);
@@ -237,9 +250,12 @@ async function loadJobs() {
         renderJobs();
         updateStats();
 
+        return true;
     } catch (error) {
         console.error("Failed to load jobs:", error);
-        alert("Could not load job applications from the server.");
+        alert("Could not load applications. Check your connection.");
+
+        return false;
     }
 }
 

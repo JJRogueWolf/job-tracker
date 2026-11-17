@@ -46,8 +46,6 @@ function updateCard() {
     const offsetY = localY - (rect.height/2);
     targetRotationX = -(offsetY / (rect.height/2)) * 15;
     targetRotationY = offsetX / (rect.width/2) * 15;
-    
-    // card.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
 }
  
 function animate(timestamp) {
@@ -57,7 +55,6 @@ function animate(timestamp) {
 
     const deltaTime = Math.min((timestamp - previousTime) / 1000, 0.033);
     previousTime = timestamp;
-    // console.log(deltaTime.toFixed(4));
 
     const forceX = (targetRotationX - currentRotationX) * stiffness;
     const forceY = (targetRotationY - currentRotationY) * stiffness;
