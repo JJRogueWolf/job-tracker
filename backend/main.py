@@ -85,11 +85,6 @@ class Job(JobCreate):
     id: UUID
     model_config = ConfigDict(from_attributes=True)
 
-
-# @app.get("/")
-# def home():
-#     return {"message": "Job Tracker API is running"}
-
 @app.get("/jobs", response_model=list[Job])
 def get_jobs(db: DbSession):
     statement = select(JobDB).order_by(
